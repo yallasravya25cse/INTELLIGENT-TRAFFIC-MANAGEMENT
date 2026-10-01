@@ -1,0 +1,422 @@
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+
+#define max 20
+#define inf 99999
+
+typedef struct{
+int vertex;
+double distance;
+} HeapNode;
+
+typedef struct{
+HeapNode heap[max * max];
+int size;
+} MinHeap;
+
+char loc[max][50];
+int locCount = 0;
+double distanceMatrix[max][max], traffic[max][max];
+
+void swap(HeapNode *a, HeapNode *b){
+HeapNode temp = *a;
+*a = *b;
+*b = temp;
+}
+
+void heapifyUp(MinHeap *p, int index){
+int parent;
+while (index > 0){
+
+parent = (index - 1)/2;
+if (p->heap[parent].distance <= p->heap[index].distance){
+break;
+}
+swap(&p->heap[parent], &p->heap[index]);
+index = parent;
+}
+}
+void heapifyDown(MinHeap *p, int index){
+int left, right, smallest;
+while (1){
+left = 2 * index + 1;
+right = 2 * index + 2;
+smallest = index;
+if (left < p->size &&p->heap[left].distance < p->heap[smallest].distance)
+{
+smallest = left;
+}
+
+if (right < p->size &&p->heap[right].distance < p->heap[smallest].distance)
+{
+smallest = right;
+}
+
+if (smallest==index){
+break;
+}
+swap(&p->heap[index], &p->heap[smallest]);
+index = smallest;
+}
+}
+
+void push(MinHeap *p, int vertex, double distance){
+p->heap[p->size].vertex = vertex;
+p->heap[p->size].distance = distance;
+heapifyUp(p,p->size);
+p->size++;
+}
+
+HeapNode pop(MinHeap *p){
+HeapNode result = p->heap[0];
+p->size--;
+
+if (p->size > 0){
+p->heap[0] = p->heap[p->size];
+heapifyDown(p, 0);
+}
+return result;
+}
+
+double getTrafficFactor(int l){
+if (l == 1){
+return 1.0;  
+}     
+if (l == 2){
+return 1.5;      
+}
+if (l == 3){
+return 2.0;
+}       
+return 1.0;
+}
+
+const char* getTrafficName(double factor){
+if (factor == 1.0){
+return "Low";
+}
+if (factor == 1.5){
+return "Medium";
+}
+if (factor == 2.0){
+return "High";
+}
+return "Unknown";
+}
+
+void addLocation(){
+if (locCount >= max){
+printf("\nMaximum number of locations reached.\n");
+return;
+}
+printf("\nEnter location name: ");
+scanf(" %[^\n]", loc[locCount]);
+locCount++;
+printf("Location added successfully.\n");
+}
+
+int findLocation(char name[]){
+int i;
+for (i = 0; i < locCount; i++){
+if (strcmp(loc[i], name) == 0){
+return i;
+}
+}
+return -1;
+}
+
+void addRoad(){
+char source[50], destination[50];
+double distance;
+int trafficLevel, u, v;
+if (locCount < 2){
+printf("\nAdd at least two locations first.\n");
+return;
+}
+printf("\nEnter source location: ");
+scanf(" %[^\n]", source);
+printf("Enter destination location: ");
+scanf(" %[^\n]", destination);
+u = findLocation(source);
+v = findLocation(destination);
+if (u == -1 || v == -1){
+printf("Location not found.\n");
+return;
+}
+
+if (u == v){
+printf("Source and destination cannot be the same.\n");
+return;
+}
+
+printf("Enter road distance: ");
+scanf("%lf", &distance);
+printf("\nTraffic Level:\n");
+printf("1. Low\n");
+printf("2. Medium\n");
+printf("3. High\n");
+printf("Enter choice: ");
+scanf("%d", &trafficLevel);
+distanceMatrix[u][v] = distance;
+distanceMatrix[v][u] = distance;
+traffic[u][v] =getTrafficFactor(trafficLevel);
+traffic[v][u] =getTrafficFactor(trafficLevel);
+printf("\nRoad added successfully.\n");
+}
+
+void displayNetwork(){
+int i, j;
+int found = 0;
+printf("\nROAD NETWORK\n");
+
+for (i = 0; i < locCount; i++){
+    for (j = i + 1; j < locCount; j++){
+         if (distanceMatrix[i][j] > 0)
+            {
+                printf("\n%s <--> %s", loc[i], loc[j]);
+                printf("\nDistance : %.2lf",distanceMatrix[i][j]);
+                printf("\nTraffic  : %s",getTrafficName(traffic[i][j]));
+                printf("\nCost     : %.2lf\n",distanceMatrix[i][j] *traffic[i][j]);
+                found = 1;
+            }
+        }
+    }
+    if (!found)
+        printf("\nNo roads available.\n");
+}
+double getCost(int u, int v){
+if (distanceMatrix[u][v] == 0){
+return inf;
+}
+return distanceMatrix[u][v] * traffic[u][v];
+}
+
+double dijkstra(int source,int destination,int parent[],int blockedU,int blockedV){
+double dist[max];
+int visited[max];
+MinHeap p;
+HeapNode current;
+int i, u, v;
+p.size = 0;
+for (i = 0; i < locCount; i++){
+dist[i] = inf;
+visited[i] = 0;
+parent[i] = -1;
+}
+dist[source] = 0;
+push(&p, source, 0);
+while (p.size > 0){
+current = pop(&p);
+u = current.vertex;
+if (visited[u]){
+continue;
+}
+visited[u] = 1;
+if (u == destination){
+break;
+}
+
+for (v = 0; v < locCount; v++){
+    if ((u == blockedU && v == blockedV) ||(u == blockedV && v == blockedU)){
+          continue;
+            }
+            if (distanceMatrix[u][v] > 0 && !visited[v]){
+                double newDistance = dist[u] + getCost(u, v);
+                if (newDistance < dist[v]){
+                    dist[v] = newDistance;
+                    parent[v] = u;
+                    push(&p, v, newDistance);
+                }
+            }
+        }
+    }
+    return dist[destination];
+}
+void printRoute(int parent[], int source, int destination){
+int path[max], count = 0 ,current = destination, i;
+
+while (current != -1){
+path[count++] = current;
+if (current == source){
+break;
+}
+current = parent[current];
+}
+
+if (path[count - 1] != source){
+printf("No route available.\n");
+return;
+}
+
+for(i = count - 1; i >= 0; i--){
+printf("%s", loc[path[i]]);
+        if (i != 0)
+            printf(" -> ");
+}
+printf("\n");
+}
+
+void findShortestRoute(){
+char sourceName[50], destinationName[50];
+int source, destination, parent[max];
+double cost;
+printf("\nEnter source location: ");
+scanf(" %[^\n]", sourceName);
+printf("Enter destination location: ");
+scanf(" %[^\n]", destinationName);
+source = findLocation(sourceName);
+destination = findLocation(destinationName);
+
+if (source == -1 || destination == -1){
+printf("\nLocation not found.\n");
+return;
+}
+
+cost = dijkstra(source,destination,parent,-1,-1);
+if (cost >= inf){
+printf("\nNo route exists between these locations.\n");
+return;
+}
+printf("\n SHORTEST ROUTE \n");
+printf("Source      : %s\n", loc[source]);
+printf("Destination : %s\n", loc[destination]);
+printf("Route       : ");
+printRoute(parent, source, destination);
+printf("Total Cost  : %.2lf\n", cost);
+}
+
+void findAnotherRoute(){
+char sourceName[50], destinationName[50];
+int source, destination, parent[max], shortestParent[max];
+double shortestCost, alternativeCost, bestAlternative = inf;
+int path[max], pathCount = 0, current, bestBlockedU = -1,bestBlockedV = -1, i;
+printf("\nEnter source location: ");
+scanf(" %[^\n]", sourceName);
+printf("Enter destination location: ");
+scanf(" %[^\n]", destinationName);
+source=findLocation(sourceName);
+destination=findLocation(destinationName);
+if (source == -1 || destination == -1){
+printf("\nLocation not found.\n");
+return;
+}
+shortestCost = dijkstra(source,destination,shortestParent,-1, -1 );
+if (shortestCost >= inf){
+printf("\nNo route exists.\n");
+return;
+}
+current = destination;
+while (current != -1){
+path[pathCount++] = current;
+if (current == source){
+break;
+}
+current = shortestParent[current];
+}
+for(i = 0; i < pathCount - 1; i++){
+int u = path[i];
+int v = path[i + 1];
+alternativeCost = dijkstra(source, destination, parent,u,v);
+if (alternativeCost < bestAlternative){
+bestAlternative = alternativeCost;
+bestBlockedU = u;
+bestBlockedV = v;
+}
+}
+if (bestAlternative >= inf){
+printf("\nNo alternative route available.\n");
+return;
+}
+dijkstra(source,destination,parent,bestBlockedU,bestBlockedV);
+printf("\nROUTE RESULTS \n");
+printf("\nShortest Route:\n");
+printRoute(shortestParent,source,destination);
+printf("Cost: %.2lf\n", shortestCost);
+printf("\nAlternative Route:\n");
+printRoute( parent, source,destination);
+printf("Cost: %.2lf\n", bestAlternative);
+}
+
+void updateTraffic(){
+char sourceName[50], destinationName[50];
+int source, destination, level;
+printf("\nEnter source location: ");
+scanf(" %[^\n]", sourceName);
+printf("Enter destination location: ");
+scanf(" %[^\n]", destinationName);
+source = findLocation(sourceName);
+destination = findLocation(destinationName);
+if (source == -1 || destination == -1){
+printf("\nLocation not found.\n");
+return;
+}
+if (distanceMatrix[source][destination] == 0){
+printf("\nNo road exists between these locations.\n");
+return;
+}
+printf("\nTraffic Levels:\n");
+printf("1. Low\n");
+printf("2. Medium\n");
+printf("3. High\n");
+printf("Enter new traffic level: ");
+scanf("%d", &level);
+
+if (level < 1 || level > 3){
+printf("Invalid traffic level.\n");
+return;
+}
+
+traffic[source][destination] =getTrafficFactor(level);
+traffic[destination][source] =getTrafficFactor(level);
+printf("\nTraffic updated successfully.\n");
+printf("New Traffic: %s\n",getTrafficName(traffic[source][destination] ));
+}
+
+int main(){
+int i, j, ch;
+for (i = 0; i < max; i++){
+    for (j = 0; j < max; j++){
+        distanceMatrix[i][j] = 0;
+        traffic[i][j] = 1.0;
+        }
+    }
+while (1){
+
+printf("\n   INTELLIGENT TRAFFIC MANAGEMENT SYSTEM\n");
+printf("1. Add Location\n");
+printf("2. Add Road\n");
+printf("3. Display Road Network\n");
+printf("4. Find Shortest Route\n");
+printf("5. Find Alternative Route\n");
+printf("6. Update Traffic Information\n");
+printf("7. Exit\n");
+printf("\nEnter your choice: ");
+scanf("%d", &ch);
+switch (ch){
+case 1:
+       addLocation();
+       break;
+case 2:
+       addRoad();
+       break;
+case 3:
+       displayNetwork();
+       break;
+case 4:
+       findShortestRoute();
+       break;
+case 5:
+       findAnotherRoute();
+       break;
+case 6:
+       updateTraffic();
+       break;
+case 7:
+       return 0;
+default:
+       printf("\nInvalid choice.\n");
+        }
+    }
+return 0;
+}
